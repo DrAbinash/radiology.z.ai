@@ -1,0 +1,62 @@
+# Radiology Workstation — standalone docker-compose for Synology
+# Pulls studies from Orthanc (on the same NAS). Does NOT touch the ERP.
+
+services:
+  radiology-db:
+    image: postgres:16-alpine
+    container_name: radiology-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${RAD_DB_USER:-radiology}
+      POSTGRES_PASSWORD: ${RAD_DB_PASSWORD:-changeme}
+      POSTGRES_DB: ${RAD_DB_NAME:-radiology}
+    volumes:
+      - radiology_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${RAD_DB_USER:-radiology}"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  radiology:
+    build: .
+    container_name: radiology-workstation
+    restart: unless-stopped
+    ports:
+      - "${RAD_HOST_PORT:-3002}:3000"
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://${RAD_DB_USER:-radiology}:${RAD_DB_PASSWORD:-changeme}@radiology-db:5432/${RAD_DB_NAME:-radiology}
+      # Orthanc on the same NAS — where studies live
+      ORTHANC_URL: ${ORTHANC_URL:-http://host.docker.internal:8042}
+      ORTHANC_USER: ${ORTHANC_USER:-}
+      ORTHANC_PASSWORD: ${ORTHANC_PASSWORD:-}
+      # Viewer launch URLs (open on the user's laptop browser)
+      OHIF_URL: ${OHIF_URL:-}
+      WEASIS_URL: ${WEASIS_URL:-weasis://}
+      DICOM_WEB_URL: ${DICOM_WEB_URL:-}
+      # Ollama AI (optional — Windows PC on LAN)
+      OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2}
+      # Optional: ERP boundary (for patient demographics + delivery push)
+      ERP_API_URL: ${ERP_API_URL:-}
+      BOUNDARY_API_KEY: ${BOUNDARY_API_KEY:-}
+      # 2 users (created by the seed script)
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-abinash}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-changeme}
+      ADMIN_NAME: ${ADMIN_NAME:-Dr. Abinash Kumar}
+      RADIOLOGIST_USERNAME: ${RADIOLOGIST_USERNAME:-sugandha}
+      RADIOLOGIST_PASSWORD: ${RADIOLOGIST_PASSWORD:-changeme}
+      RADIOLOGIST_NAME: ${RADIOLOGIST_NAME:-Dr. Sugandha Priyadarshini}
+    depends_on:
+      radiology-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:3000/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  radiology_db_data:
