@@ -64,6 +64,19 @@ interface StudyDetail {
     weasis: string | null;
     orthancBuiltIn: string | null;
   };
+  // ERP enrichment (present when ERP_API_URL is configured)
+  erpEnrichment?: {
+    patientName?: string;
+    patientId?: string;
+    age?: string;
+    sex?: string;
+    phone?: string;
+    referringDoctor?: string;
+    clinicalHistory?: string;
+    studyName?: string;
+    billStatus?: string;
+    priority?: string;
+  } | null;
 }
 
 export default function Cockpit({
@@ -232,7 +245,7 @@ export default function Cockpit({
         const res = await api<StudyDetail>(`/api/studies/${encodeURIComponent(studyUid)}`);
         setData(res);
         const d = res.draft;
-        setClinicalHistory(d?.clinicalHistory ?? "");
+        setClinicalHistory(d?.clinicalHistory ?? res.erpEnrichment?.clinicalHistory ?? "");
         setTechnique(d?.technique ?? "");
         setFindings(d?.findings ?? "");
         setImpression(d?.impression ? [d.impression] : []);
@@ -517,20 +530,26 @@ export default function Cockpit({
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {/* Patient bar */}
+        {/* Patient bar — ERP-enriched where available, else Orthanc DICOM tags */}
         <Card className="mb-4">
           <CardContent className="p-4 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 text-sm">
             <div>
               <p className="text-xs text-muted-foreground">Patient ID</p>
-              <p className="font-medium font-mono">{study.patientId}</p>
+              <p className="font-medium font-mono">
+                {data.erpEnrichment?.patientId ?? study.patientId}
+              </p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Age / Sex</p>
-              <p className="font-medium">{study.patientSex || "—"}</p>
+              <p className="font-medium">
+                {data.erpEnrichment?.age ?? "—"} / {data.erpEnrichment?.sex ?? study.patientSex ?? "—"}
+              </p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Study</p>
-              <p className="font-medium">{study.studyDescription || "—"}</p>
+              <p className="font-medium">
+                {data.erpEnrichment?.studyName ?? study.studyDescription ?? "—"}
+              </p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Body Part</p>
@@ -538,7 +557,9 @@ export default function Cockpit({
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Referring Doctor</p>
-              <p className="font-medium">{study.referringPhysician || "—"}</p>
+              <p className="font-medium">
+                {data.erpEnrichment?.referringDoctor ?? study.referringPhysician ?? "—"}
+              </p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Date</p>
@@ -546,6 +567,27 @@ export default function Cockpit({
                 {study.studyDate ? new Date(study.studyDate).toLocaleDateString("en-IN") : "—"}
               </p>
             </div>
+            {/* ERP enrichment indicator */}
+            {data.erpEnrichment && (
+              <div className="col-span-2 sm:col-span-4 lg:col-span-6 pt-2 border-t border-border/50 flex items-center gap-3 text-xs text-muted-foreground">
+                {data.erpEnrichment.phone && <span>📞 {data.erpEnrichment.phone}</span>}
+                {data.erpEnrichment.billStatus && (
+                  <span className={
+                    data.erpEnrichment.billStatus === "paid"
+                      ? "text-primary font-medium"
+                      : "text-amber-600 font-medium"
+                  }>
+                    Bill: {data.erpEnrichment.billStatus}
+                  </span>
+                )}
+                {data.erpEnrichment.priority && data.erpEnrichment.priority !== "routine" && (
+                  <span className="text-destructive font-medium">
+                    {data.erpEnrichment.priority.toUpperCase()}
+                  </span>
+                )}
+                <span className="ml-auto text-primary">✓ ERP data linked</span>
+              </div>
+            )}
           </CardContent>
         </Card>
 

@@ -33,7 +33,7 @@ function assembleFinalReport(sections: {
   return parts.join("\n\n");
 }
 
-// ── Study detail (Orthanc + draft + viewer URLs) ────────────────────────────
+// ── Study detail (Orthanc + ERP enrichment + draft + viewer URLs) ───────────
 router.get("/:uid", requireAuth, async (req, res) => {
   const uid = String(req.params.uid);
   try {
@@ -50,10 +50,20 @@ router.get("/:uid", requireAuth, async (req, res) => {
       .orderBy(desc(reportDraftsTable.updatedAt))
       .limit(1);
 
+    // ── ERP enrichment (optional) ──────────────────────────────────────────
+    // Fetch patient demographics, referring doctor, clinical history from the
+    // ERP by accession number. Falls back to Orthanc tags if not found.
+    let erpEnrichment = null;
+    if (study.accessionNumber) {
+      const { enrichFromErp } = await import("../boundary/erp");
+      erpEnrichment = await enrichFromErp(study.accessionNumber);
+    }
+
     res.json({
       study,
       draft,
       viewerUrls: getViewerUrls(uid),
+      erpEnrichment,
     });
   } catch (err) {
     console.error("[study/detail] error:", err);

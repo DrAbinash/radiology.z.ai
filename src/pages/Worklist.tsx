@@ -30,6 +30,16 @@ interface Study {
   draftStatus: string | null;
   draftRadiologist: string | null;
   viewerUrls: ViewerUrls;
+  // ERP enrichment (present when ERP_API_URL is configured)
+  erpEnriched?: {
+    patientName?: string;
+    age?: string;
+    sex?: string;
+    referringDoctor?: string;
+    studyName?: string;
+    billStatus?: string;
+    priority?: string;
+  } | null;
 }
 
 const MODALITY_LABELS: Record<string, string> = {
@@ -173,14 +183,17 @@ export default function Worklist({
                             {MODALITY_LABELS[s.modality] ?? s.modality}
                           </div>
                           <div className="min-w-0">
-                            <p className="font-semibold truncate">{s.patientName}</p>
+                            <p className="font-semibold truncate">
+                              {s.erpEnriched?.patientName ?? s.patientName}
+                            </p>
                             <p className="text-xs text-muted-foreground">
-                              {s.age ?? "—"} / {s.patientSex || "—"}
+                              {s.erpEnriched?.age ?? s.age ?? "—"} / {s.erpEnriched?.sex ?? s.patientSex ?? "—"}
                               {s.accessionNumber && <> · <span className="font-mono">{s.accessionNumber}</span></>}
                               {s.studyDate && <> · {s.studyDate}</>}
+                              {s.erpEnriched?.referringDoctor && <> · Dr. {s.erpEnriched.referringDoctor}</>}
                             </p>
                             <p className="text-sm text-muted-foreground truncate">
-                              {s.studyDescription || "No description"}
+                              {s.erpEnriched?.studyName ?? s.studyDescription ?? "No description"}
                               {s.bodyPart && ` · ${s.bodyPart}`}
                             </p>
                           </div>
@@ -195,6 +208,14 @@ export default function Worklist({
                         )}
                         {s.draftStatus === "delivered" && (
                           <Badge className="bg-green-500/10 text-green-700 border-green-500/20">Delivered</Badge>
+                        )}
+                        {s.erpEnriched?.billStatus === "pending" && (
+                          <Badge variant="outline" className="text-amber-600 border-amber-500/30">Bill pending</Badge>
+                        )}
+                        {s.erpEnriched?.priority && s.erpEnriched.priority !== "routine" && (
+                          <Badge className="bg-destructive/10 text-destructive border-destructive/20">
+                            {s.erpEnriched.priority.toUpperCase()}
+                          </Badge>
                         )}
                         {/* Viewer launch buttons */}
                         <div className="flex gap-1">
