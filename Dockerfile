@@ -21,11 +21,14 @@ RUN if [ -f pnpm-lock.yaml ]; then \
 
 COPY . .
 
-# Build with pnpm because the scripts use pnpm.
-RUN pnpm run build
-
-# Keep only production dependencies for runtime.
-RUN pnpm prune --prod
+# Build using the same package manager that was installed.
+RUN if [ -f pnpm-lock.yaml ]; then \
+      pnpm run build && pnpm prune --prod; \
+    elif [ -f package-lock.json ]; then \
+      npm run build && npm ci --only=production; \
+    else \
+      npm run build && npm install --only=production; \
+    fi
 
 FROM node:22-bookworm-slim AS runtime
 RUN apt-get update \
