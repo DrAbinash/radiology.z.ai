@@ -21,6 +21,8 @@ import QuickFindingsPanel, {
 } from "@/components/QuickFindingsPanel";
 import PrintPreview, { type ReportData } from "@/components/PrintPreview";
 import VoiceDictationButton from "@/components/VoiceDictationButton";
+import { detectCriticalFindings } from "@/lib/criticalFindings";
+import { useTheme } from "@/hooks/useTheme";
 import type { RadUser } from "@/lib/session";
 import type { Side } from "@/lib/sideSwap";
 import {
@@ -96,6 +98,8 @@ export default function Cockpit({
   const [showPreview, setShowPreview] = useState(false);
   const [finalizedReport, setFinalizedReport] = useState<ReportData | null>(null);
   const [delivering, setDelivering] = useState(false);
+  const { theme, toggle: toggleTheme } = useTheme();
+  const [copied, setCopied] = useState(false);
 
   // Refs for keyboard navigation between sections
   const findingsRef = useRef<HTMLTextAreaElement>(null);
@@ -215,6 +219,11 @@ export default function Cockpit({
   const [findings, setFindings] = useState("");
   const [impression, setImpression] = useState<string[]>([]);
   const [recommendation, setRecommendation] = useState("Please correlate with clinical findings.");
+
+  // ── Critical findings detection ──────────────────────────────────────────
+  // Scans findings + impression for urgent keywords (hemorrhage, mass effect,
+  // stroke, cord compression, etc.) and shows an alert banner.
+  const criticalFindings = detectCriticalFindings(`${findings} ${impression.join(" ")}`);
 
   // Quick Select engine state
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
@@ -376,23 +385,34 @@ export default function Cockpit({
   // preview. After printing, the radiologist can mark the study as delivered
   // (which logs the print issuance in the ERP) — all in one flow.
   async function handleFinalize() {
-    if (!confirm("Finalize this report? This pushes it to the ERP for printing and delivery.")) {
+    if (!confirm("Finalize this report? This stores it locally and pushes it to the ERP for printing.")) {
       return;
     }
     setFinalizing(true);
     try {
-      const res = await api<{ ok: boolean; finalReportText: string }>(
+      const res = await api<{ ok: boolean; finalReportText: string; erpPush?: { ok: boolean; error?: string } }>(
         `/api/studies/${encodeURIComponent(studyUid)}/finalize`,
         { method: "POST" },
       );
+
+      // Show ERP push result
+      if (res.erpPush) {
+        if (res.erpPush.ok) {
+          // Show a brief success note, then open print preview
+          setTimeout(() => alert("✓ Report pushed to ERP — staff can now print from the ERP."), 100);
+        } else {
+          setTimeout(() => alert(`⚠ ERP push failed: ${res.erpPush!.error}\n\nThe report is saved locally. You can still print from here.`), 100);
+        }
+      }
+
       // Build the report data for the print preview from the current study + sections
       const reportData: ReportData = {
-        patientName: data!.study.patientName,
-        age: data!.study.patientSex || null,
-        sex: data!.study.patientSex || null,
+        patientName: data!.erpEnrichment?.patientName ?? data!.study.patientName,
+        age: data!.erpEnrichment?.age ?? null,
+        sex: data!.erpEnrichment?.sex ?? data!.study.patientSex ?? null,
         accessionNumber: data!.study.accessionNumber,
         studyDate: data!.study.studyDate,
-        referringDoctor: data!.study.referringPhysician || null,
+        referringDoctor: data!.erpEnrichment?.referringDoctor ?? data!.study.referringPhysician ?? null,
         modality: data!.study.modality,
         bodyPart: data!.study.bodyPart,
         clinicalHistory,
@@ -525,9 +545,32 @@ export default function Cockpit({
             <Button onClick={handleFinalize} disabled={finalizing} className="bg-primary hover:bg-primary/90">
               {finalizing ? "Finalizing…" : "✓ Finalize & Sign"}
             </Button>
+            <Button variant="ghost" size="sm" onClick={toggleTheme} title="Toggle dark mode">
+              {theme === "light" ? "🌙" : "☀️"}
+            </Button>
           </div>
         </div>
       </header>
+
+      {/* Critical findings alert banner */}
+      {criticalFindings.length > 0 && (
+        <div className="bg-destructive/10 border-b border-destructive/30 px-4 py-2">
+          <div className="max-w-7xl mx-auto flex items-start gap-2">
+            <span className="text-destructive font-bold text-sm shrink-0">⚠ Critical:</span>
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+              {criticalFindings.map((cf, i) => (
+                <span
+                  key={i}
+                  className={cf.severity === "critical" ? "text-destructive font-medium" : "text-amber-700 font-medium"}
+                  title={cf.message}
+                >
+                  {cf.keyword}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {/* Patient bar — ERP-enriched where available, else Orthanc DICOM tags */}
@@ -568,26 +611,43 @@ export default function Cockpit({
               </p>
             </div>
             {/* ERP enrichment indicator */}
-            {data.erpEnrichment && (
-              <div className="col-span-2 sm:col-span-4 lg:col-span-6 pt-2 border-t border-border/50 flex items-center gap-3 text-xs text-muted-foreground">
-                {data.erpEnrichment.phone && <span>📞 {data.erpEnrichment.phone}</span>}
-                {data.erpEnrichment.billStatus && (
-                  <span className={
-                    data.erpEnrichment.billStatus === "paid"
-                      ? "text-primary font-medium"
-                      : "text-amber-600 font-medium"
-                  }>
-                    Bill: {data.erpEnrichment.billStatus}
-                  </span>
-                )}
-                {data.erpEnrichment.priority && data.erpEnrichment.priority !== "routine" && (
-                  <span className="text-destructive font-medium">
-                    {data.erpEnrichment.priority.toUpperCase()}
-                  </span>
-                )}
-                <span className="ml-auto text-primary">✓ ERP data linked</span>
-              </div>
-            )}
+            {/* Copy patient info + ERP enrichment row */}
+            <div className="col-span-2 sm:col-span-4 lg:col-span-6 pt-2 border-t border-border/50 flex items-center gap-3 text-xs text-muted-foreground">
+              <button
+                onClick={() => {
+                  const info = [
+                    data.erpEnrichment?.patientName ?? study.patientName,
+                    `${data.erpEnrichment?.age ?? ""} / ${data.erpEnrichment?.sex ?? study.patientSex ?? ""}`,
+                    study.accessionNumber && `Acc: ${study.accessionNumber}`,
+                    study.modality,
+                    (data.erpEnrichment?.studyName ?? study.studyDescription),
+                  ].filter(Boolean).join(" | ");
+                  navigator.clipboard.writeText(info);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                }}
+                className="text-primary hover:underline flex items-center gap-1"
+                title="Copy patient info to clipboard"
+              >
+                {copied ? "✓ Copied" : "📋 Copy patient info"}
+              </button>
+              {data.erpEnrichment?.phone && <span>📞 {data.erpEnrichment.phone}</span>}
+              {data.erpEnrichment?.billStatus && (
+                <span className={
+                  data.erpEnrichment.billStatus === "paid"
+                    ? "text-primary font-medium"
+                    : "text-amber-600 font-medium"
+                }>
+                  Bill: {data.erpEnrichment.billStatus}
+                </span>
+              )}
+              {data.erpEnrichment?.priority && data.erpEnrichment.priority !== "routine" && (
+                <span className="text-destructive font-medium">
+                  {data.erpEnrichment.priority.toUpperCase()}
+                </span>
+              )}
+              {data.erpEnrichment && <span className="ml-auto text-primary">✓ ERP data linked</span>}
+            </div>
           </CardContent>
         </Card>
 

@@ -4,11 +4,13 @@ import { readRadSession, clearRadSession, type RadSession } from "@/lib/session"
 import Login from "@/pages/Login";
 import Worklist from "@/pages/Worklist";
 import Cockpit from "@/pages/Cockpit";
+import Reports from "@/pages/Reports";
 import PrintSettingsPage from "@/pages/PrintSettings";
 
 type View =
   | { name: "worklist" }
   | { name: "cockpit"; uid: string }
+  | { name: "reports" }
   | { name: "settings" };
 
 export default function App() {
@@ -49,11 +51,22 @@ export default function App() {
     return <PrintSettingsPage user={session.user} onBack={() => setView({ name: "worklist" })} />;
   }
 
+  if (view.name === "reports") {
+    return (
+      <Reports
+        user={session.user}
+        onBack={() => setView({ name: "worklist" })}
+        onOpenStudy={(uid) => setView({ name: "cockpit", uid })}
+      />
+    );
+  }
+
   return (
     <Worklist
       user={session.user}
       onOpenStudy={(uid) => setView({ name: "cockpit", uid })}
       onOpenSettings={() => setView({ name: "settings" })}
+      onOpenReports={() => setView({ name: "reports" })}
     />
   );
 }

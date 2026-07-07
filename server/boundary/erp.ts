@@ -130,3 +130,49 @@ export async function batchEnrichFromErp(
 
   return map;
 }
+
+/**
+ * Pushes a finalized report to the ERP so staff can print from the ERP's
+ * existing print screen. The report text is stored in
+ * radiology_studies.finalReport — the same column the ERP's own reporting
+ * used, so the ERP's print/delivery/portal flows work unchanged.
+ *
+ * Returns true on success, false on failure (the standalone keeps the
+ * report locally either way — never loses work).
+ */
+export async function pushReportToErp(
+  accessionNumber: string,
+  finalReportText: string,
+  reportedBy: string,
+): Promise<{ ok: boolean; error?: string }> {
+  if (!isErpEnabled()) {
+    return { ok: false, error: "ERP not configured" };
+  }
+  if (!accessionNumber) {
+    return { ok: false, error: "No accession number on this study" };
+  }
+
+  try {
+    const res = await fetch(
+      `${ERP_API_URL}/api/boundary/studies/${encodeURIComponent(accessionNumber)}/report`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Boundary-Key": BOUNDARY_KEY },
+        body: JSON.stringify({
+          status: "reported_final",
+          finalReportText,
+          reportedBy,
+          reportedAt: new Date().toISOString(),
+        }),
+        signal: AbortSignal.timeout(10000),
+      },
+    );
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      return { ok: false, error: `ERP ${res.status}: ${body.slice(0, 100)}` };
+    }
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Connection failed" };
+  }
+}

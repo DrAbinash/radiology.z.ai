@@ -50,10 +50,12 @@ export default function Worklist({
   user,
   onOpenStudy,
   onOpenSettings,
+  onOpenReports,
 }: {
   user: RadUser;
   onOpenStudy: (uid: string) => void;
   onOpenSettings?: () => void;
+  onOpenReports?: () => void;
 }) {
   const [studies, setStudies] = useState<Study[]>([]);
   const [loading, setLoading] = useState(true);
@@ -105,6 +107,11 @@ export default function Worklist({
             {user.role === "admin" && onOpenSettings && (
               <button onClick={onOpenSettings} className="text-sm text-muted-foreground hover:text-primary" title="Settings">
                 ⚙️
+              </button>
+            )}
+            {onOpenReports && (
+              <button onClick={onOpenReports} className="text-sm text-muted-foreground hover:text-primary" title="Search past reports">
+                📂
               </button>
             )}
             <Button variant="ghost" size="sm" onClick={load} title="Refresh">↻</Button>

@@ -26,6 +26,7 @@ interface AiSettings {
   temperature: string;
   maxTokens: number;
   enabled: boolean;
+  pushToErp: boolean;
 }
 
 const ALL_SECTIONS = [
@@ -470,6 +471,18 @@ export default function PrintSettingsPage({
                       onChange={(e) => updateAi("enabled", e.target.checked)}
                     />
                     Enable AI features in the cockpit
+                  </label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={aiSettings.pushToErp}
+                      onChange={(e) => updateAi("pushToErp", e.target.checked)}
+                    />
+                    <span>
+                      <strong>Push finalized reports to ERP</strong> — lets staff
+                      print from the ERP's print screen (requires ERP_API_URL +
+                      BOUNDARY_API_KEY in .env)
+                    </span>
                   </label>
                   <Button onClick={handleSaveAi} size="sm" className="bg-primary hover:bg-primary/90">
                     <Save className="h-4 w-4" /> Save AI Settings

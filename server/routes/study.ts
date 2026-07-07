@@ -154,7 +154,90 @@ router.post("/:uid/finalize", requireAuth, async (req: AuthRequest, res) => {
     }
   } catch { /* best-effort */ }
 
-  res.json({ ok: true, finalReportText: finalText });
+  // ── Push finalized report to the ERP (if enabled) ──────────────────────
+  // This lets staff print from the ERP's existing print screen. The report
+  // text lands in radiology_studies.finalReport — same column the ERP's own
+  // reporting used, so print/delivery/portal all work unchanged.
+  let erpPushResult: { ok: boolean; error?: string } | null = null;
+  try {
+    const { aiSettingsTable } = await import("../db/schema");
+    const [aiSettings] = await db.select().from(aiSettingsTable).limit(1);
+    const pushEnabled = aiSettings?.pushToErp ?? true;
+    if (pushEnabled) {
+      const { pushReportToErp, isErpEnabled } = await import("../boundary/erp");
+      if (isErpEnabled() && draft.accessionNumber) {
+        erpPushResult = await pushReportToErp(draft.accessionNumber, finalText, user.name);
+      }
+    }
+  } catch { /* best-effort — ERP push failure doesn't block finalize */ }
+
+  res.json({
+    ok: true,
+    finalReportText: finalText,
+    erpPush: erpPushResult,
+  });
+});
+
+// ── Re-open a finalized report for correction (amendment) ────────────────────
+router.post("/:uid/amend", requireAuth, async (req: AuthRequest, res) => {
+  const uid = String(req.params.uid);
+  const [draft] = await db
+    .select()
+    .from(reportDraftsTable)
+    .where(eq(reportDraftsTable.studyInstanceUid, uid))
+    .orderBy(desc(reportDraftsTable.updatedAt))
+    .limit(1);
+
+  if (!draft) {
+    res.status(404).json({ error: "No report found" });
+    return;
+  }
+
+  // Re-open: set status back to draft so the cockpit allows editing again
+  await db
+    .update(reportDraftsTable)
+    .set({ status: "draft", finalizedAt: null })
+    .where(eq(reportDraftsTable.id, draft.id));
+
+  res.json({ ok: true });
+});
+
+// ── List finalized reports (search past reports) ─────────────────────────────
+router.get("/reports/search", requireAuth, async (req, res) => {
+  const q = (req.query.q as string) || "";
+  const [rows] = await Promise.all([
+    db.select().from(reportDraftsTable).where(eq(reportDraftsTable.status, "finalized")),
+  ]);
+
+  let reports = rows.sort((a, b) => {
+    const aTime = a.finalizedAt ? new Date(a.finalizedAt).getTime() : 0;
+    const bTime = b.finalizedAt ? new Date(b.finalizedAt).getTime() : 0;
+    return bTime - aTime;
+  });
+
+  if (q) {
+    const ql = q.toLowerCase();
+    reports = reports.filter(
+      (r) =>
+        (r.patientName ?? "").toLowerCase().includes(ql) ||
+        (r.accessionNumber ?? "").toLowerCase().includes(ql) ||
+        (r.studyDescription ?? "").toLowerCase().includes(ql) ||
+        (r.modality ?? "").toLowerCase().includes(ql),
+    );
+  }
+
+  res.json({
+    reports: reports.slice(0, 100).map((r) => ({
+      studyInstanceUid: r.studyInstanceUid,
+      patientName: r.patientName,
+      accessionNumber: r.accessionNumber,
+      modality: r.modality,
+      studyDescription: r.studyDescription,
+      studyDate: r.studyDate,
+      finalizedAt: r.finalizedAt,
+      radiologistName: r.radiologistName,
+    })),
+  });
 });
 
 // ── Mark delivered (optional — if ERP boundary configured, pushes to ERP) ────

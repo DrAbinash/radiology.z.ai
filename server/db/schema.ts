@@ -194,6 +194,9 @@ export const aiSettingsTable = pgTable("ai_settings", {
   temperature: text("temperature").notNull().default("0.3"),
   maxTokens: integer("max_tokens").notNull().default(1024),
   enabled: boolean("enabled").notNull().default(true),
+  // When true, finalized reports are pushed to the ERP so staff can print
+  // from the ERP's existing print screen. Requires ERP_API_URL + BOUNDARY_API_KEY.
+  pushToErp: boolean("push_to_erp").notNull().default(true),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 

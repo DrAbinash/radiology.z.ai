@@ -24,3 +24,20 @@
 * { border-color: var(--color-border); }
 body { background: var(--color-background); color: var(--color-foreground); font-family: ui-sans-serif, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
 html { scroll-behavior: smooth; }
+
+/* Dark mode overrides */
+.dark {
+  --color-background: oklch(0.16 0.015 165);
+  --color-foreground: oklch(0.97 0.005 165);
+  --color-card: oklch(0.21 0.02 165);
+  --color-card-foreground: oklch(0.97 0.005 165);
+  --color-primary: oklch(0.68 0.14 162);
+  --color-primary-foreground: oklch(0.16 0.02 165);
+  --color-secondary: oklch(0.27 0.03 162);
+  --color-secondary-foreground: oklch(0.97 0.005 165);
+  --color-muted: oklch(0.26 0.02 165);
+  --color-muted-foreground: oklch(0.72 0.015 165);
+  --color-border: oklch(1 0 0 / 10%);
+  --color-input: oklch(1 0 0 / 12%);
+  --color-ring: oklch(0.68 0.14 162);
+}
