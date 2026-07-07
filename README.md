@@ -41,6 +41,11 @@ Set at minimum:
 - `RAD_DB_PASSWORD` — pick a strong password
 - `ADMIN_PASSWORD` / `RADIOLOGIST_PASSWORD` — your login passwords
 
+Leave `HTTPS_ENABLED=false` unless you've put a reverse proxy with a real
+TLS certificate in front of this app. Accessing it as plain
+`http://<nas-ip>:3002` (the normal case) requires this to stay `false`,
+or login will not work.
+
 ### 3. Build & start
 ```bash
 docker compose up -d --build
@@ -101,6 +106,26 @@ If you later want the ERP to own the reporting:
 The ERP is never modified by this standalone service.
 
 ---
+
+## Backups
+
+Your draft/finalized reports, protocols, and settings live in the Postgres
+container, not in Orthanc. Back it up regularly:
+
+```bash
+chmod +x scripts/backup-db.sh   # one-time
+./scripts/backup-db.sh
+```
+
+This writes a compressed dump to `./backups/`. Schedule it daily via
+Synology's **Control Panel → Task Scheduler → Create → Scheduled Task →
+User-defined script**, running `sh /volume1/docker/radiology/scripts/backup-db.sh`.
+
+To restore:
+```bash
+gunzip -c backups/radiology-<date>.sql.gz | docker compose exec -T radiology-db \
+  psql -U "$RAD_DB_USER" -d "$RAD_DB_NAME"
+```
 
 ## Troubleshooting
 | Problem | Fix |

@@ -28,7 +28,7 @@ services:
       NODE_ENV: production
       DATABASE_URL: postgres://${RAD_DB_USER:-radiology}:${RAD_DB_PASSWORD:-changeme}@radiology-db:5432/${RAD_DB_NAME:-radiology}
       # Orthanc on the same NAS — where studies live
-      ORTHANC_URL: ${ORTHANC_URL:-http://host.docker.internal:8042}
+      ORTHANC_URL: ${ORTHANC_URL:-http://172.16.1.137:8042}
       ORTHANC_USER: ${ORTHANC_USER:-}
       ORTHANC_PASSWORD: ${ORTHANC_PASSWORD:-}
       # Viewer launch URLs (open on the user's laptop browser)
@@ -36,7 +36,7 @@ services:
       WEASIS_URL: ${WEASIS_URL:-weasis://}
       DICOM_WEB_URL: ${DICOM_WEB_URL:-}
       # Ollama AI (optional — Windows PC on LAN)
-      OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
+      OLLAMA_URL: ${OLLAMA_URL:-http://192.168.1.140:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2}
       # Optional: ERP boundary (for patient demographics + delivery push)
       ERP_API_URL: ${ERP_API_URL:-}
