@@ -12,11 +12,11 @@ import aiRouter from "./routes/ai";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const isProd = process.env.NODE_ENV === "production";
-
 // The compiled server runs from /app/dist/server/index.mjs, so the built
 // frontend lives one level up in /app/dist/public.
 const publicDir = path.resolve(__dirname, "../public");
+const indexPath = path.join(publicDir, "index.html");
+const hasFrontend = existsSync(indexPath);
 
 const app: Express = express();
 app.set("trust proxy", 1);
@@ -34,27 +34,20 @@ app.use("/api/meta", metaRouter);
 app.use("/api/settings", settingsRouter);
 app.use("/api/ai", aiRouter);
 
-// Serve built frontend (production)
-if (isProd) {
-  console.log("[app] Static frontend dir:", publicDir);
-  console.log(
-    "[app] Frontend index exists:",
-    existsSync(path.join(publicDir, "index.html")),
-  );
+// Serve the built frontend. This is gated on the presence of the built
+// index.html rather than NODE_ENV so a misconfigured environment cannot
+// silently disable static serving (in dev the file is absent, so this is
+// a no-op and Vite serves the client instead).
+console.log("[app] Static frontend dir:", publicDir);
+console.log("[app] Frontend index exists:", hasFrontend);
 
+if (hasFrontend) {
   app.use(express.static(publicDir));
 
   app.get("*", (req: Request, res: Response, next) => {
     if (req.path.startsWith("/api") || req.path === "/health") {
       return next();
     }
-
-    const indexPath = path.join(publicDir, "index.html");
-    if (!existsSync(indexPath)) {
-      res.status(500).send("Frontend index.html not found");
-      return;
-    }
-
     res.sendFile(indexPath);
   });
 }
