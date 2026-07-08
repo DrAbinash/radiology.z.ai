@@ -10,9 +10,13 @@ import metaRouter from "./routes/meta";
 import settingsRouter from "./routes/settings";
 import aiRouter from "./routes/ai";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const artifactDir = path.resolve(__dirname, "..");
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const isProd = process.env.NODE_ENV === "production";
+
+// The compiled server runs from /app/dist/server/index.mjs, so the built
+// frontend lives one level up in /app/dist/public.
+const publicDir = path.resolve(__dirname, "../public");
 
 const app: Express = express();
 app.set("trust proxy", 1);
@@ -31,15 +35,27 @@ app.use("/api/settings", settingsRouter);
 app.use("/api/ai", aiRouter);
 
 // Serve built frontend (production)
-const staticDir = path.resolve(artifactDir, "dist", "public");
-if (isProd && existsSync(staticDir)) {
-  app.use(express.static(staticDir));
-  app.get("*", (req: Request, res: Response) => {
-    if (req.path.startsWith("/api/")) {
-      res.status(404).json({ error: "Not found" });
+if (isProd) {
+  console.log("[app] Static frontend dir:", publicDir);
+  console.log(
+    "[app] Frontend index exists:",
+    existsSync(path.join(publicDir, "index.html")),
+  );
+
+  app.use(express.static(publicDir));
+
+  app.get("*", (req: Request, res: Response, next) => {
+    if (req.path.startsWith("/api") || req.path === "/health") {
+      return next();
+    }
+
+    const indexPath = path.join(publicDir, "index.html");
+    if (!existsSync(indexPath)) {
+      res.status(500).send("Frontend index.html not found");
       return;
     }
-    res.sendFile(path.join(staticDir, "index.html"));
+
+    res.sendFile(indexPath);
   });
 }
 
