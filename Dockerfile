@@ -54,12 +54,20 @@ COPY --from=base /app/drizzle.config.ts ./drizzle.config.ts
 COPY --from=base /app/tsconfig.json ./tsconfig.json
 COPY --from=base /app/server/db ./server/db
 COPY --from=base /app/scripts ./scripts
-RUN npm install --no-save --no-audit --no-fund drizzle-kit tsx
+# Pinned to the versions resolved in package-lock.json so this matches what the
+# build stage compiled against — an unpinned install can silently resolve to a
+# newer version and prompt an interactive install (breaking non-interactive
+# `docker compose exec`/entrypoint runs).
+RUN npm install --no-save --no-audit --no-fund drizzle-kit@0.30.6 tsx@4.23.0
+
+COPY docker-entrypoint.sh ./docker-entrypoint.sh
+RUN chmod +x ./docker-entrypoint.sh
 
 EXPOSE 3000
 
 HEALTHCHECK --interval=15s --timeout=10s --start-period=20s --retries=5 \
   CMD curl -fsS http://localhost:3000/health || exit 1
 
-ENTRYPOINT ["/usr/bin/tini", "--"]
-CMD ["node", "--enable-source-maps", "./dist/server/index.mjs"]
+# Auto-migrates + seeds on every start (both steps are idempotent), then
+# starts the server. See docker-entrypoint.sh.
+ENTRYPOINT ["/usr/bin/tini", "--", "./docker-entrypoint.sh"]
