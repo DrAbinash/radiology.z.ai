@@ -23,7 +23,7 @@ Synology NAS                          Your Laptop
 
 ---
 
-## Deploy in 6 Steps
+## Deploy in 5 Steps
 
 ### 1. Get the code on your NAS
 ```bash
@@ -50,17 +50,14 @@ or login will not work.
 ```bash
 docker compose up -d --build
 ```
+On every start the container automatically applies the DB schema and
+seeds/updates the 2 users from your `.env` (both steps are idempotent, so
+this is safe on restarts too — no manual migration step needed).
 
-### 4. Create DB tables + users (one-time)
-```bash
-docker compose exec radiology sh -c "cd /app && npx drizzle-kit push --config drizzle.config.ts"
-docker compose exec radiology sh -c "cd /app && npx tsx scripts/seed-defaults.ts"
-```
-
-### 5. Open it
+### 4. Open it
 Go to `http://<nas-ip>:3002` → log in with your username/password.
 
-### 6. (Optional) Ollama AI on your Windows PC
+### 5. (Optional) Ollama AI on your Windows PC
 ```powershell
 winget install Ollama.Ollama
 ollama pull llama3.2
@@ -130,7 +127,7 @@ gunzip -c backups/radiology-<date>.sql.gz | docker compose exec -T radiology-db 
 ## Troubleshooting
 | Problem | Fix |
 |---------|-----|
-| Can't log in | Run the seed script (step 4) |
+| Can't log in | Check container logs (`docker compose logs radiology`) for migration/seed errors; confirm `ADMIN_USERNAME`/`ADMIN_PASSWORD` in `.env` match what you're typing |
 | Worklist empty | Check `ORTHANC_URL` — Orthanc must be reachable from the container |
 | Weasis doesn't open | Install Weasis on your laptop; the `weasis://` protocol must be registered |
 | AI buttons fail | Check Ollama is running + `OLLAMA_URL` is correct in Settings → AI |

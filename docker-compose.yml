@@ -27,6 +27,9 @@ services:
     environment:
       NODE_ENV: production
       DATABASE_URL: postgres://${RAD_DB_USER:-radiology}:${RAD_DB_PASSWORD:-changeme}@radiology-db:5432/${RAD_DB_NAME:-radiology}
+      # Set to "true" only if this is served over HTTPS (e.g. behind a TLS
+      # reverse proxy) — controls the session cookie's secure/sameSite flags.
+      HTTPS_ENABLED: ${HTTPS_ENABLED:-false}
       # Orthanc on the same NAS — where studies live
       ORTHANC_URL: ${ORTHANC_URL:-http://172.16.1.137:8042}
       ORTHANC_USER: ${ORTHANC_USER:-}
