@@ -58,7 +58,9 @@ COPY --from=base /app/scripts ./scripts
 # build stage compiled against — an unpinned install can silently resolve to a
 # newer version and prompt an interactive install (breaking non-interactive
 # `docker compose exec`/entrypoint runs).
-RUN npm install --no-save --no-audit --no-fund drizzle-kit@0.30.6 tsx@4.23.0
+RUN npm install --no-save --no-audit --no-fund drizzle-kit@0.30.6 tsx@4.23.0 \
+  && test -f node_modules/drizzle-kit/bin.cjs \
+  && test -f node_modules/tsx/dist/cli.mjs
 
 COPY docker-entrypoint.sh ./docker-entrypoint.sh
 RUN chmod +x ./docker-entrypoint.sh
