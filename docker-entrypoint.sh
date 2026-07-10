@@ -11,8 +11,14 @@ cd /app
 # — some Docker storage backends (seen on Synology overlay2/network volumes)
 # silently fail to create npm's .bin symlinks, which otherwise crash-loops
 # the whole container with a misleading "not found" error.
+# --force auto-approves data-loss confirmations, which drizzle-kit otherwise
+# prompts for interactively (drizzle.config.ts sets strict: true, so it
+# prompts even for plain CREATE TABLE). Without --force, the container has no
+# TTY to answer that prompt, so it silently defaults to "No, abort" (exit 0,
+# no tables created) and the subsequent seed step fails with
+# `relation "users" does not exist`.
 echo "==> Applying database schema (drizzle-kit push)..."
-node node_modules/drizzle-kit/bin.cjs push --config drizzle.config.ts
+node node_modules/drizzle-kit/bin.cjs push --config drizzle.config.ts --force
 
 echo "==> Seeding default users + protocols..."
 node node_modules/tsx/dist/cli.mjs scripts/seed-defaults.ts
