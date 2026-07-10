@@ -21,13 +21,17 @@ RUN if [ -f pnpm-lock.yaml ]; then \
 
 COPY . .
 
-# Build using the same package manager that was installed.
+# Build using the same package manager that was installed. node_modules is
+# intentionally NOT pruned to production-only here: drizzle-kit + tsx (used by
+# the runtime entrypoint below for migration/seeding) are devDependencies, and
+# re-installing just those two into a separately-pruned runtime node_modules
+# proved unreliable across environments (missing .bin symlinks on some Docker
+# storage backends, missing entry files on others). Shipping the already-built
+# full node_modules is simpler and avoids a second install entirely.
 RUN if [ -f pnpm-lock.yaml ]; then \
-      pnpm run build && pnpm prune --prod; \
-    elif [ -f package-lock.json ]; then \
-      npm run build && npm ci --only=production; \
+      pnpm run build; \
     else \
-      npm run build && npm install --only=production; \
+      npm run build; \
     fi
 
 FROM node:22-bookworm-slim AS runtime
@@ -40,27 +44,16 @@ ENV NODE_ENV=production
 ENV SERVER_PORT=3000
 ENV TZ=Asia/Kolkata
 
-# Runtime: production deps + built artifacts
+# Runtime: full node_modules (see note above) + built artifacts + migration/
+# seed toolchain source (drizzle.config.ts, server/db, scripts) so the
+# entrypoint can run drizzle-kit push + seed-defaults.ts out of the box.
 COPY --from=base /app/node_modules ./node_modules
 COPY --from=base /app/dist ./dist
 COPY --from=base /app/package.json ./package.json
-
-# Migration/seed toolchain — the README documents running these against the
-# running container, so the runtime image must include the source + devDeps.
-# drizzle-kit + tsx are devDependencies, pruned during the build stage above;
-# we reinstall just those two (no package-lock churn) so `docker compose exec`
-# can run drizzle-kit push and tsx scripts/seed-defaults.ts out of the box.
 COPY --from=base /app/drizzle.config.ts ./drizzle.config.ts
 COPY --from=base /app/tsconfig.json ./tsconfig.json
 COPY --from=base /app/server/db ./server/db
 COPY --from=base /app/scripts ./scripts
-# Pinned to the versions resolved in package-lock.json so this matches what the
-# build stage compiled against — an unpinned install can silently resolve to a
-# newer version and prompt an interactive install (breaking non-interactive
-# `docker compose exec`/entrypoint runs).
-RUN npm install --no-save --no-audit --no-fund drizzle-kit@0.30.6 tsx@4.23.0 \
-  && test -f node_modules/drizzle-kit/bin.cjs \
-  && test -f node_modules/tsx/dist/cli.mjs
 
 COPY docker-entrypoint.sh ./docker-entrypoint.sh
 RUN chmod +x ./docker-entrypoint.sh
