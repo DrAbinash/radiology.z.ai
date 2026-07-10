@@ -7,11 +7,15 @@ set -e
 
 cd /app
 
+# Invoke the packages' JS entry points directly instead of node_modules/.bin/*
+# — some Docker storage backends (seen on Synology overlay2/network volumes)
+# silently fail to create npm's .bin symlinks, which otherwise crash-loops
+# the whole container with a misleading "not found" error.
 echo "==> Applying database schema (drizzle-kit push)..."
-./node_modules/.bin/drizzle-kit push --config drizzle.config.ts
+node node_modules/drizzle-kit/bin.cjs push --config drizzle.config.ts
 
 echo "==> Seeding default users + protocols..."
-./node_modules/.bin/tsx scripts/seed-defaults.ts
+node node_modules/tsx/dist/cli.mjs scripts/seed-defaults.ts
 
 echo "==> Starting server..."
 exec node --enable-source-maps ./dist/server/index.mjs
